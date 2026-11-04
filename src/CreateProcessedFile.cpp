@@ -1,28 +1,20 @@
 #include "CreateProcessedFile.h"
 
-
+/**
+ * Decode one binary input file into a ROOT tree and optionally derive the
+ * time-difference tree before closing the output file.
+ */
 int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_setup, const run_setup* my_run_setup, bool is_first_file) {
-    // This function processes a single binary file and creates a corresponding processed ROOT file.
-    // The implementation details would go here, including reading the binary data, applying processing steps,
-    // and writing the results to a ROOT file.
-    
-    // For now, we will just print out the parameters to demonstrate that the function is being called correctly.
     cout << "Processing file: " << run_path << endl;
     cout << "Is first file: " << (is_first_file ? "Yes" : "No") << endl;
-    int debug = 0; // Set debug level as needed
-    
-    // Placeholder for actual processing logic
-    // ...
+    int debug = 0;
 
     string base_tree_name = "Data";
     string output_file_name = proc_setup->GetOutputDir() + proc_setup->GetCurrentRun() + "_processed_"+ to_string(bin_index) + ".root";
     string timediff_tree_name = "Data_Timediff";
     
-    /* *** Deleted, see end of file
-    if (proc_setup->get_timediff) {
-        base_tree_name = "Temp";
-    }*/
-    // Debug 
+    // Each input file receives its own output file, while the run name keeps
+    // the files grouped by acquisition.
     cout << "Output file name: " << output_file_name << endl;
     cout << "Base tree name: " << base_tree_name << endl;
     
@@ -32,6 +24,7 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
         return 1; // Return an error code if the file cannot be opened
     }
 
+    // Only the first file carries the run-level header.
     UShort_t header;
     if (is_first_file) {
         fread(&header, sizeof(header), 1, binfile);
@@ -51,6 +44,7 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
     Int_t num_wf_samples;
     vector<int> *wfs = new vector<int>();
 
+    // Reserve waveform storage once so repeated events reuse the same buffer.
     if (my_run_setup->has_waveforms) {
         wfs->reserve(num_wf_samples);
     }
@@ -58,6 +52,8 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
     TFile* outfile = new TFile(output_file_name.c_str(), "RECREATE");
     TTree* data_tree = new TTree(base_tree_name.c_str(), base_tree_name.c_str());
 
+    // Branches are created conditionally to match the schema reported by the
+    // binary header and avoid reading fields that are not present.
     data_tree->Branch("Board", &board, "Board/s");
     data_tree->Branch("Channel", &channel, "Channel/s");
     data_tree->Branch("Time", &time, "Time/l");
@@ -78,6 +74,7 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
         data_tree->Branch("Waveforms", &wfs);
     }
 
+    // Decode records until the file has no complete board value left.
     while (fread(&board, sizeof(board), 1, binfile)) {
         fread(&channel, sizeof(channel), 1, binfile);
         fread(&time, sizeof(time), 1, binfile);
@@ -103,6 +100,8 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
                 wfs->at(i) = static_cast<int>(wf_sample);
             }
         }
+        // Filtering happens before Fill so rejected events never enter the
+        // processed tree.
         if (!(proc_setup->keep_saturation) && saturation) {
             continue; // Skip this event if saturation is not to be kept
         }
@@ -118,7 +117,8 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
 
     data_tree->Write();
     if (proc_setup->get_timediff) {
-        // Placeholder for time difference tree creation logic
+        // The raw tree is retained because it is the source for neighbour
+        // searches while the derived tree is being built.
         TTree* timediff_tree = new TTree(timediff_tree_name.c_str(), timediff_tree_name.c_str());
         // Fill the timediff_tree with appropriate data
         debug = CreateTimeDiffTree(data_tree, timediff_tree, proc_setup, my_run_setup);
@@ -133,30 +133,17 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
     }
     outfile->Close();
     delete outfile;
-    /*  *** Idea: Call raw data tree temp instead of data and delete it, if timediff data is written
-    if (proc_setup->get_timediff) {
-        outfile = new TFile(output_file_name.c_str(), "UPDATE");
-        TTree* temp_tree = (TTree*)outfile->Get("Temp");
-        if (temp_tree) {
-            cout << "Deleting Temp tree from output file: " << output_file_name << endl;
-            temp_tree->Delete();
-        }
-        outfile->Close();
-        delete outfile;
-    }
-    */
     delete wfs;
 
     return 0; // Return 0 to indicate success
 }
 
-
-
+/**
+ * Add nearest-before and nearest-after detector information for each main
+ * detector event. Entries are traversed in a timestamp index so the source
+ * tree does not need to be physically sorted.
+ */
 int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_setup, const run_setup* my_run_setup) {
-    // This function creates a time difference tree based on the data in the provided data_tree.
-    // The implementation details would go here, including calculating time differences and filling the new tree.
-    
-    // For now, we will just print out a message to demonstrate that the function is being called correctly.
     cout << "Creating time difference tree..." << endl;
 
     int verbose = proc_setup->verbose;
@@ -164,8 +151,8 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
     vector<main_detector> main_detectors = proc_setup->GetMainDetectors();
     vector<veto_detector> veto_detectors = proc_setup->GetVetoDetectors();
 
-    //int n_detectors = main_detectors.size() + veto_detectors.size();
-
+    // These variables are bound to the input tree and are overwritten while
+    // searching neighbouring entries.
     UShort_t board, channel, energy_ch;
     Double_t energy_cal;
     Short_t energy_short;
@@ -184,8 +171,8 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
     Char_t current_wf_code;
     vector<int> *current_wfs = new vector<int>();
 
-    bool is_veto_event = false;
-
+    // Maps are keyed by board/channel so output branches can be generated for
+    // both main and veto detector definitions.
     map<pair<int, int>, UShort_t> energy_dep_before;
     map<pair<int, int>, UShort_t> energy_dep_after;
     map<pair<int, int>, ULong64_t> time_diff_before;
@@ -206,6 +193,7 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
         detector_channels.push_back({det.board, det.channel});
     }
 
+    // Print the initialized state when constructing the derived-tree schema.
     cout << "Testing the before/after maps" << endl;
     for (const auto& entry : energy_dep_before) {
         cout << "Board: " << entry.first.first << ", Channel: " << entry.first.second << ", Energy Dep Before: " << entry.second << endl;
@@ -325,6 +313,8 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
 
         data_tree->GetEntry(index_list[i]);
         bool matches_main = false;
+        // The output first copies the current event, then appends detector
+        // proximity and deposited-energy branches.
         for (const auto& det : main_detectors) {
             if (board == det.board && channel == det.channel) {
                 matches_main = true;
@@ -349,6 +339,8 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
             current_wf_code = wf_code;
             current_wfs = new vector<int>(*wfs);
         }
+        // Search outward in the timestamp index for the closest event on each
+        // configured detector channel.
         for (const auto& det : detector_channels) {
             time_diff_before[det] = kMaxULong64;
             energy_dep_before[det] = 0;
@@ -377,10 +369,13 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
 
     cout << "Finished creating time diff tree, return to CreateProcessedFile ... "  << endl;
 
-    return 0; // Return 0 to indicate success
+    return 0;
 }
 
-
+/**
+ * Create a time-difference tree and omit main events that fall inside a
+ * configured veto detector's time and energy window.
+ */
 int CreateTimeDiffVeto(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_setup, const run_setup* my_run_setup) {
     int verbose = proc_setup->verbose;
     vector<main_detector> main_detectors = proc_setup->GetMainDetectors();
@@ -473,6 +468,8 @@ int CreateTimeDiffVeto(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
         timediff_tree->Branch("Waveforms", &current_wfs);
     }
 
+    // Build output branches using numeric board/channel names so they remain
+    // unique even when detector labels are reused.
     for (const auto& det : detector_channels) {
         string suffix = to_string(det.first) + "_" + to_string(det.second);
         string name = "TimeDiffBefore_" + suffix;
@@ -516,6 +513,8 @@ int CreateTimeDiffVeto(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
             *current_wfs = *wfs;
         }
 
+        // A main event is rejected when a neighbouring veto event satisfies
+        // both its ADC threshold and configured time window.
         veto = false;
         for (const auto& det : detector_channels) {
             time_diff_before[det] = kMaxULong64;

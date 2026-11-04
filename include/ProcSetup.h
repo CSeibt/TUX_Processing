@@ -9,39 +9,47 @@
 
 using namespace std;
 
+/** Configuration for one main (non-veto) detector channel. */
 struct main_detector{
-    string name;
-    UShort_t board;
-    UShort_t channel;
-    TF1* calib_function;
+    string name; ///< Name used for generated output branches.
+    UShort_t board; ///< Digitizer board number.
+    UShort_t channel; ///< Digitizer channel number.
+    TF1* calib_function; ///< Optional calibration function, owned elsewhere.
     // The calibration function is optional; it is filled later if detector calibration is enabled.
     main_detector(string n, UShort_t b, UShort_t c) : name(move(n)), board(b), channel(c), calib_function(nullptr) {}
 };
 
+/** Configuration for a detector channel used to veto nearby events. */
 struct veto_detector{
-    string name;
-    UShort_t board;
-    UShort_t channel;
-    UShort_t veto_threshold;
+    string name; ///< Name used for generated output branches.
+    UShort_t board; ///< Digitizer board number.
+    UShort_t channel; ///< Digitizer channel number.
+    UShort_t veto_threshold; ///< Minimum ADC energy that triggers the veto.
     // Threshold is the ADC cut used to decide whether this veto detector fires.
     veto_detector(string n, UShort_t b, UShort_t c, UShort_t v) : name(n), board(b), channel(c), veto_threshold(v) {}
 };
 
+/**
+ * Loads processing options and detector definitions from a JSON configuration.
+ *
+ * A ProcSetup instance also owns the run-list cursor used by ProcessRun.
+ */
 class ProcSetup {
     public:
+        /** Parse `path_to_json` and initialize the processing configuration. */
         ProcSetup(string path_to_json);
         ~ProcSetup();
-        string GetRawPath();
-        string GetOutputDir();
-        string GetNextRun();
-        string GetCurrentRun();
-        void Print();
-        vector<UShort_t> GetAllDetectorBoards();
-        vector<UShort_t> GetAllDetectorChannels();
+        string GetRawPath(); ///< Return the directory containing raw runs.
+        string GetOutputDir(); ///< Return the directory for processed ROOT files.
+        string GetNextRun(); ///< Return and advance to the next configured run.
+        string GetCurrentRun(); ///< Return the most recently returned run.
+        void Print(); ///< Print the loaded configuration to standard output.
+        vector<UShort_t> GetAllDetectorBoards(); ///< Return unique configured boards.
+        vector<UShort_t> GetAllDetectorChannels(); ///< Return unique configured channels.
 
-        vector<main_detector> GetMainDetectors() const { return detectors; }
-        vector<veto_detector> GetVetoDetectors() const { return veto_detectors; }
-        ULong64_t GetVetoTimeThreshold() const { return veto_time_threshold_ps; }
+        vector<main_detector> GetMainDetectors() const { return detectors; } ///< Return main detectors.
+        vector<veto_detector> GetVetoDetectors() const { return veto_detectors; } ///< Return veto detectors.
+        ULong64_t GetVetoTimeThreshold() const { return veto_time_threshold_ps; } ///< Return the veto window in ps.
 
         // Constant variables that are set with the constructor, can be accessed from outside without getters:
         const bool keep_saturation;

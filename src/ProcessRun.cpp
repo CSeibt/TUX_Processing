@@ -1,6 +1,6 @@
 #include "ProcessRun.h"
 
-
+// Raw files are named with the run identifier and use the .BIN extension.
 vector<string> GetBinFileList(const string& run_path, const string& run) {
     vector<string> bin_file_list;
 
@@ -27,7 +27,7 @@ vector<string> GetBinFileList(const string& run_path, const string& run) {
     return bin_file_list;
 }
 
-
+// The first two bytes describe which optional fields follow each event.
 int ReadHeader(run_setup* my_run_setup) {
     UShort_t header;
     UShort_t board, channel, energy_ch;
@@ -78,6 +78,7 @@ int ProcessRun(ProcSetup* setup, string run) {
     cout << "Processing run: " << run << endl;
     string run_path = setup->GetRawPath() + run + "/RAW/";
     run_setup my_run_setup;
+    // The header determines how every record in this run must be decoded.
     my_run_setup.bin_files = GetBinFileList(run_path, run);
     int debug = 0;
     if (my_run_setup.bin_files.size() == 0) {
@@ -91,6 +92,8 @@ int ProcessRun(ProcSetup* setup, string run) {
         return 11;
     }
 
+    // The first file includes the shared binary header; subsequent files start
+    // directly with event records.
     for (int i = 0; i < my_run_setup.bin_files.size(); i++) {
         if (i == 0) {
             debug = CreateProcessedFile(my_run_setup.bin_files[i], i, setup, &my_run_setup, true);

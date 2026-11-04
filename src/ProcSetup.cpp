@@ -9,6 +9,8 @@
 
 using json = nlohmann::json;
 
+// Convert the JSON representation into a complete, validated intermediate
+// configuration before moving its values into the ProcSetup members.
 ProcSetup::Config ProcSetup::LoadConfig(string path_to_json)
 {
 	ifstream file(path_to_json);
@@ -103,6 +105,8 @@ ProcSetup::ProcSetup(Config config, string path_to_json)
 
 ProcSetup::~ProcSetup() = default;
 
+// Accessors intentionally return the configured paths without adding
+// separators; the JSON configuration is expected to provide them as needed.
 string ProcSetup::GetRawPath()
 {
 	return raw_file_path;
@@ -136,6 +140,7 @@ vector<UShort_t> ProcSetup::GetAllDetectorBoards()
 {
 	set<UShort_t> boards;
 
+	// A set removes duplicates when several detector definitions share a board.
 	for (const auto& detector : detectors) {
 		boards.insert(detector.board);
 	}
@@ -164,6 +169,8 @@ vector<UShort_t> ProcSetup::GetAllDetectorChannels()
 
 void ProcSetup::Print()
 {
+    // Keep this output human-readable: it is used to confirm the JSON setup
+    // before processing begins.
 	cout << "ProcSetup configuration:\n";
 	cout << "  keep_saturation: " << keep_saturation << "\n";
 	cout << "  keep_pileup: " << keep_pileup << "\n";
