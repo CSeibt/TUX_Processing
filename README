@@ -1,0 +1,23 @@
+How to install:
+1. Get source code via "git clone <url>" into directory <main>
+2.1 For the examples to work as they are, you should do 
+cd TUX_Processing
+mkdir build
+cd build
+cmake ../
+make
+./biro_proc ../examples/json_files/<name>.json
+
+2.2 You can also create the build directory anywhere then it is:
+mkdir build
+cmake <path_to_TUX_Processing/>
+make 
+./biro_proc <path_to_json>.json
+But then adjust the paths in the example json files.
+
+
+To-do list:
+- Test against other processing scripts and compare results
+- implement energy calibration
+- create all examples/jsons
+- ...
