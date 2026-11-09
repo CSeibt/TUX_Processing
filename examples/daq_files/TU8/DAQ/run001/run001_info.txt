@@ -1,0 +1,18 @@
+Run ID = run001
+Start time = Di Jul 28 12:00:37 2026
+Stop time = Di Jul 28 12:04:27 2026
+
+CH0@DT5780P_877
+	Energy calibration: C0 = 0; C1 = 1; C2 = 0; unit = keV
+	Real time = 0:03:49.512
+	Live time = 0:03:45.207
+	Dead time = 1.88 %
+	Input counts = 312219; average rate (cps) = 1360.4±2.4
+	Pile up counts = 5425; average rate (cps) = 23.64±0.32
+	Saturation counts = 50; average rate (cps) = 0.218±0.031
+	E cut counts = 0; average rate (cps) = 0
+	PSD cut counts = 0; average rate (cps) = 0
+	T cut counts = 0; average rate (cps) = 0
+	Singles counts = 0; average rate (cps) = 0
+	Output counts = 306313; average rate (cps) = 1334.6±2.4
+

@@ -61,6 +61,18 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
  * @param is_first_file Whether this file still contains its binary header.
  * @return Zero on success, or a non-zero error code on I/O/tree failure.
  */
+
+ int CreateTimeDiffVetoTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_setup, const run_setup* my_run_setup);
+ 
+
 int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_setup, const run_setup* my_run_setup, bool is_first_file);
 
+/**
+ * Apply an energy calibration function to a raw ADC value.
+ *
+ * @param energy_ch Raw ADC energy channel.
+ * @param calib_func Calibration function to evaluate.
+ * @return Calibrated energy value.
+ */
+double ApplyCalibration(UShort_t energy_ch, TF1* calib_func);
 #endif

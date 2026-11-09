@@ -4,6 +4,20 @@
  * Decode one binary input file into a ROOT tree and optionally derive the
  * time-difference tree before closing the output file.
  */
+
+double ApplyCalibration(UShort_t energy_ch, TF1* calib_function) {
+    if (calib_function) {
+        // Apply calibration function to the raw ADC value
+        return calib_function->Eval(static_cast<double>(energy_ch));
+    } else {
+        // If calibration_function is nullptr, return the raw energy value and print a warning
+        cerr << "Warning: No calibration function provided. Returning raw energy." << endl;
+        return static_cast<double>(energy_ch);
+    }
+    // Just the end
+    return 0;
+}
+
 int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_setup, const run_setup* my_run_setup, bool is_first_file) {
     cout << "Processing file: " << run_path << endl;
     cout << "Is first file: " << (is_first_file ? "Yes" : "No") << endl;
@@ -43,10 +57,20 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
     Char_t wf_code;
     Int_t num_wf_samples;
     vector<int> *wfs = new vector<int>();
+    map<pair<int, int>, TF1*> calibration_map;
 
     // Reserve waveform storage once so repeated events reuse the same buffer.
     if (my_run_setup->has_waveforms) {
         wfs->reserve(num_wf_samples);
+    }
+
+    // Create calibration functions for main detectors if calibration is enabled.
+    if (proc_setup->calibrate_detectors) {
+        for (const auto& detector : proc_setup->GetMainDetectors()) {
+            if (detector.calib_function) {
+                calibration_map[{detector.board, detector.channel}] = detector.calib_function;
+            }
+        }
     }
 
     TFile* outfile = new TFile(output_file_name.c_str(), "RECREATE");
@@ -108,6 +132,12 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
         if (!(proc_setup->keep_pileup) && pileup) {
             continue; // Skip this event if pileup is not to be kept
         }
+
+        if (proc_setup->calibrate_detectors) {
+            TF1* calib_func = calibration_map[{board, channel}];
+            energy_cal = ApplyCalibration(energy_ch, calib_func);
+        }
+
         data_tree->Fill();
         wfs->clear();
         pileup = false;
@@ -119,9 +149,17 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
     if (proc_setup->get_timediff) {
         // The raw tree is retained because it is the source for neighbour
         // searches while the derived tree is being built.
+        cout << "Creating time difference tree..." << endl;
         TTree* timediff_tree = new TTree(timediff_tree_name.c_str(), timediff_tree_name.c_str());
         // Fill the timediff_tree with appropriate data
-        debug = CreateTimeDiffTree(data_tree, timediff_tree, proc_setup, my_run_setup);
+        if (proc_setup->apply_veto) {
+            cout << "Applying veto during time difference tree creation." << endl;
+            debug = CreateTimeDiffVetoTree(data_tree, timediff_tree, proc_setup, my_run_setup);
+        } else {
+            cout << "Not applying veto during time difference tree creation." << endl;
+            debug = CreateTimeDiffTree(data_tree, timediff_tree, proc_setup, my_run_setup);
+        }
+        
         if (debug != 0) {
             cerr << "Error creating time difference tree. Exiting." << endl;
             outfile->Close();
@@ -376,7 +414,7 @@ int CreateTimeDiffTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
  * Create a time-difference tree and omit main events that fall inside a
  * configured veto detector's time and energy window.
  */
-int CreateTimeDiffVeto(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_setup, const run_setup* my_run_setup) {
+int CreateTimeDiffVetoTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_setup, const run_setup* my_run_setup) {
     int verbose = proc_setup->verbose;
     vector<main_detector> main_detectors = proc_setup->GetMainDetectors();
     vector<veto_detector> veto_detectors = proc_setup->GetVetoDetectors();
@@ -481,10 +519,18 @@ int CreateTimeDiffVeto(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
         name = "EnergyDepAfter_" + suffix;
         timediff_tree->Branch(name.c_str(), &energy_dep_after[det], (name + "/s").c_str());
     }
-
+    cout << "Processing " << n_entries << " entries to create time difference tree with veto" << endl;
+    int percent = 1;
     for (Long64_t i = 0; i < n_entries; ++i) {
-        if (verbose > 1 && i < 100)
-            cout << "Processing entry " << i << " of " << n_entries << endl;
+        if (verbose > 0) {
+            if (verbose > 1 && i < 100) {
+                cout << "Processing entry " << i << " of " << n_entries << endl;
+            }
+            if (i == percent * int(n_entries / 100)) {
+                cout << "\rProgress: " << (100.0 * i / n_entries) << "%" << flush;
+                percent++;
+            }
+        }
         data_tree->GetEntry(index_list[i]);
 
         bool matches_main = false;
@@ -547,9 +593,8 @@ int CreateTimeDiffVeto(TTree* data_tree, TTree* timediff_tree, ProcSetup* proc_s
                 veto = true;
             }
         }
-        if (!veto){
-            timediff_tree->Fill();
-        }
+        timediff_tree->Fill();
+        
     }
 
     delete wfs;

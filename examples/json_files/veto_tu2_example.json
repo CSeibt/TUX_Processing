@@ -2,7 +2,7 @@
     "name": "veto_proc",
     "input_dir": "../examples/daq_files/TU2/",
     "runs": ["run390"],
-    "output_dir": "../examples/output_files/",
+    "output_dir": "../examples/output_files/TU2_results/",
     "processing_setup": {
         "keep_saturation": true,
         "keep_pileup": true,

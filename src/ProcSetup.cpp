@@ -1,13 +1,105 @@
 #include "ProcSetup.h"
 
 #include <fstream>
+#include <memory>
 #include <set>
 #include <stdexcept>
 #include <utility>
 
 #include <nlohmann/json.hpp>
+#include <TFile.h>
 
 using json = nlohmann::json;
+
+namespace {
+
+TF1* LoadCalibrationFunction(const json& detector_json, const string& detector_name)
+{
+	if (!detector_json.contains("calibration") ||
+		!detector_json.at("calibration").is_object()) {
+		throw runtime_error(
+			"ProcSetup: main detector '" + detector_name +
+			"' is missing the calibration object");
+	}
+
+	const json& calibration = detector_json.at("calibration");
+	if (!calibration.contains("calibration_type") ||
+		!calibration.at("calibration_type").is_string()) {
+		throw runtime_error(
+			"ProcSetup: main detector '" + detector_name +
+			"' is missing calibration.calibration_type");
+	}
+
+	const string calibration_type = calibration.at("calibration_type").get<string>();
+	if (calibration_type == "file") {
+		if (!calibration.contains("calibration_file") ||
+			!calibration.at("calibration_file").is_string() ||
+			calibration.at("calibration_file").get<string>().empty()) {
+			throw runtime_error(
+				"ProcSetup: main detector '" + detector_name +
+				"' is missing a non-empty calibration.calibration_file");
+		}
+		if (!calibration.contains("calibration_tf1_name") ||
+			!calibration.at("calibration_tf1_name").is_string() ||
+			calibration.at("calibration_tf1_name").get<string>().empty()) {
+			throw runtime_error(
+				"ProcSetup: main detector '" + detector_name +
+				"' is missing a non-empty calibration.calibration_tf1_name");
+		}
+
+		const string calibration_file_path =
+			calibration.at("calibration_file").get<string>();
+		const string calibration_tf1_name =
+			calibration.at("calibration_tf1_name").get<string>();
+		TFile calibration_file(calibration_file_path.c_str(), "READ");
+		if (calibration_file.IsZombie()) {
+			throw runtime_error(
+				"ProcSetup: unable to open calibration file '" +
+				calibration_file_path + "' for main detector '" + detector_name + "'");
+		}
+
+		TObject* object = calibration_file.Get(calibration_tf1_name.c_str());
+		TF1* source_function = dynamic_cast<TF1*>(object);
+		if (source_function == nullptr) {
+			throw runtime_error(
+				"ProcSetup: calibration object '" + calibration_tf1_name +
+				"' in '" + calibration_file_path +
+				"' is not a TF1 for main detector '" + detector_name + "'");
+		}
+
+		TF1* cloned_function = dynamic_cast<TF1*>(
+			source_function->Clone((detector_name + "_calibration").c_str()));
+		if (cloned_function == nullptr) {
+			throw runtime_error(
+				"ProcSetup: failed to clone calibration TF1 '" +
+				calibration_tf1_name + "' for main detector '" + detector_name + "'");
+		}
+		return cloned_function;
+	}
+
+	if (calibration_type == "linear") {
+		if (!calibration.contains("p0") || !calibration.at("p0").is_number() ||
+			!calibration.contains("p1") || !calibration.at("p1").is_number()) {
+			throw runtime_error(
+				"ProcSetup: linear calibration for main detector '" + detector_name +
+				"' requires numeric calibration.p0 and calibration.p1");
+		}
+
+		const double p0 = calibration.at("p0").get<double>();
+		const double p1 = calibration.at("p1").get<double>();
+		auto function = make_unique<TF1>(
+			(detector_name + "_calibration").c_str(), "[0] + [1]*x");
+		function->SetParameters(p0, p1);
+		return function.release();
+	}
+
+	throw runtime_error(
+		"ProcSetup: unsupported calibration type '" + calibration_type +
+		"' for main detector '" + detector_name +
+		"'; expected 'file' or 'linear'");
+}
+
+} // namespace
 
 // Convert the JSON representation into a complete, validated intermediate
 // configuration before moving its values into the ProcSetup members.
@@ -44,13 +136,29 @@ ProcSetup::Config ProcSetup::LoadConfig(string path_to_json)
 	}
 
 	if (data.contains("main_detectors")) {
+		if (!data.at("main_detectors").is_array()) {
+			throw runtime_error("ProcSetup: main_detectors must be an array");
+		}
 		for (const auto& detector_json : data.at("main_detectors")) {
-			// Main detectors in the example file provide a name and channel, and board defaults to 0 when omitted.
+			if (!detector_json.is_object()) {
+				throw runtime_error("ProcSetup: each main detector must be an object");
+			}
 			const string name = detector_json.value("name", string{});
 			const UShort_t board = detector_json.value("board", static_cast<UShort_t>(0));
 			const UShort_t channel = detector_json.value("channel", static_cast<UShort_t>(0));
+			if (name.empty()) {
+				throw runtime_error("ProcSetup: main detector is missing a non-empty name");
+			}
 			config.detectors.emplace_back(name, board, channel);
+			if (config.calibrate_detectors) {
+				config.detectors.back().calib_function =
+					LoadCalibrationFunction(detector_json, name);
+			}
 		}
+	}
+	if (config.calibrate_detectors && config.detectors.empty()) {
+		throw runtime_error(
+			"ProcSetup: calibrate_detectors is true but no main detectors are configured");
 	}
 
 	if (data.contains("veto_detectors")) {
@@ -103,7 +211,14 @@ ProcSetup::ProcSetup(Config config, string path_to_json)
 
 }
 
-ProcSetup::~ProcSetup() = default;
+ProcSetup::~ProcSetup()
+{
+	for (const auto& detector : detectors) {
+		if(detector.calib_function) {
+			delete detector.calib_function;
+		}
+	}
+}
 
 // Accessors intentionally return the configured paths without adding
 // separators; the JSON configuration is expected to provide them as needed.

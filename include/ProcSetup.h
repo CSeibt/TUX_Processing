@@ -14,8 +14,8 @@ struct main_detector{
     string name; ///< Name used for generated output branches.
     UShort_t board; ///< Digitizer board number.
     UShort_t channel; ///< Digitizer channel number.
-    TF1* calib_function; ///< Optional calibration function, owned elsewhere.
-    // The calibration function is optional; it is filled later if detector calibration is enabled.
+    TF1* calib_function; ///< Optional calibration function, owned by ProcSetup.
+    // The calibration function is filled when detector calibration is enabled.
     main_detector(string n, UShort_t b, UShort_t c) : name(move(n)), board(b), channel(c), calib_function(nullptr) {}
 };
 

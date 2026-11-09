@@ -18,6 +18,7 @@ But then adjust the paths in the example json files.
 
 To-do list:
 - Test against other processing scripts and compare results
-- implement energy calibration
 - create all examples/jsons
-- ...
+    - missing: multiple files
+    - missing: raw data (simplest json)
+- 

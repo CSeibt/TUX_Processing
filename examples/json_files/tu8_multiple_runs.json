@@ -1,0 +1,18 @@
+{
+    "name": "tu8_calibration",
+    "input_dir": "../examples/daq_files/TU8/DAQ/",
+    "runs": ["run001", "run003", "run004"],
+    "output_dir": "../examples/output_files/TU8_results/multi_file/",
+    "processing_setup": {
+        "keep_saturation": true,
+        "keep_pileup": true,
+        "get_timediff": false,
+        "apply_veto": false
+    },
+    "main_detectors": [
+        {"name": "TU8",
+         "board": 0,
+         "channel": 0
+        }
+    ]
+}

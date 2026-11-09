@@ -1,0 +1,24 @@
+{
+    "name": "tu8_calibration",
+    "input_dir": "../examples/daq_files/TU8/DAQ/",
+    "runs": ["run004"],
+    "output_dir": "../examples/output_files/TU8_results/",
+    "processing_setup": {
+        "keep_saturation": true,
+        "keep_pileup": true,
+        "get_timediff": false,
+        "apply_veto": false,
+        "calibrate_detectors": true
+    },
+    "main_detectors": [
+        {"name": "TU8",
+         "board": 0,
+         "channel": 0,
+         "calibration": {
+            "calibration_type": "file",
+             "calibration_file": "../examples/daq_files/TU8/calibration_tu8.root",
+             "calibration_tf1_name": "calibration_fit"
+         }
+        }
+    ]
+}
