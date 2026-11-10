@@ -130,7 +130,7 @@ ProcSetup::Config ProcSetup::LoadConfig(string path_to_json)
 	if (data.contains("veto_time_window_mus")) {
 		// The JSON stores the veto window in microseconds, but the class keeps it in picoseconds.
 		const double veto_time_window_mus = data.at("veto_time_window_mus").get<double>();
-		config.veto_time_threshold_ps = static_cast<ULong64_t>(veto_time_window_mus * 1000000.0);
+		config.veto_time_threshold_ps = static_cast<ULong64_t>(veto_time_window_mus * 1e6);
 	} else {
 		config.veto_time_threshold_ps = 0;
 	}

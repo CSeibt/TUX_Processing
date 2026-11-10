@@ -420,6 +420,10 @@ int CreateTimeDiffVetoTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* pr
     vector<veto_detector> veto_detectors = proc_setup->GetVetoDetectors();
     ULong64_t veto_time_threshold = proc_setup->GetVetoTimeThreshold();
 
+    if (verbose > 0) {
+        cout << "Veto time threshold: " << veto_time_threshold << " ps" << endl;
+    }
+
     UShort_t board, channel, energy_ch;
     Double_t energy_cal;
     Short_t energy_short;
