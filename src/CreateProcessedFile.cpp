@@ -567,7 +567,7 @@ int CreateTimeDiffVetoTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* pr
             energy_dep_before[det] = 0;
             for (Long64_t j = i - 1; j >= 0; --j) {
                 data_tree->GetEntry(index_list[j]);
-                if (board == det.first && channel == det.second) {
+                if (board == det.first && channel == det.second && energy_ch >= veto_thresholds[det]) {
                     time_diff_before[det] = current_time - time;
                     energy_dep_before[det] = energy_ch;
                     break;
@@ -577,7 +577,7 @@ int CreateTimeDiffVetoTree(TTree* data_tree, TTree* timediff_tree, ProcSetup* pr
             energy_dep_after[det] = 0;
             for (Long64_t j = i + 1; j < n_entries; ++j) {
                 data_tree->GetEntry(index_list[j]);
-                if (board == det.first && channel == det.second) {
+                if (board == det.first && channel == det.second && energy_ch >= veto_thresholds[det]) {
                     time_diff_after[det] = time - current_time;
                     energy_dep_after[det] = energy_ch;
                     break;
