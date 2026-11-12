@@ -19,6 +19,7 @@ double ApplyCalibration(UShort_t energy_ch, TF1* calib_function) {
 }
 
 int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_setup, const run_setup* my_run_setup, bool is_first_file) {
+    int verbose = proc_setup->verbose;
     cout << "Processing file: " << run_path << endl;
     cout << "Is first file: " << (is_first_file ? "Yes" : "No") << endl;
     int debug = 0;
@@ -97,7 +98,14 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
         data_tree->Branch("Wf_Code", &wf_code, "Wf_Code/C");
         data_tree->Branch("Waveforms", &wfs);
     }
-
+    if (verbose > 0) {
+        cout << "Branches created for data tree." << endl;
+        if (verbose > 1) {
+            cout << "Branch details:" << endl;
+            data_tree->Print();
+        }
+    }
+    int num_events = 0;
     // Decode records until the file has no complete board value left.
     while (fread(&board, sizeof(board), 1, binfile)) {
         fread(&channel, sizeof(channel), 1, binfile);
@@ -138,12 +146,34 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
             energy_cal = ApplyCalibration(energy_ch, calib_func);
         }
 
+        num_events++;
+        if (verbose > 0 && num_events % 100000 == 0) {
+            cout << "Processed " << num_events << " events." << endl;
+        }
+        if (verbose > 2) {
+            cout << "Event " << num_events << ": Board=" << board
+                 << ", Channel=" << channel
+                 << ", Time=" << time
+                 << ", Energy_Ch=" << energy_ch
+                 << ", Energy_Cal=" << energy_cal
+                 << ", Energy_Short=" << energy_short
+                 << ", Flags=" << flags
+                 << ", Pileup=" << pileup
+                 << ", Saturation=" << saturation;
+            if (my_run_setup->has_waveforms) {
+                cout << ", Wf_Code=" << wf_code
+                     << ", Num_Wf_Samples=" << num_wf_samples;
+            }
+            cout << endl;
+        }
         data_tree->Fill();
         wfs->clear();
         pileup = false;
         saturation = false;
     }
+
     cout << "Finished processing binary file: " << run_path << endl;
+    
 
     data_tree->Write();
     if (proc_setup->get_timediff) {
@@ -170,6 +200,7 @@ int CreateProcessedFile(const string& run_path, int bin_index, ProcSetup* proc_s
         timediff_tree->Write();
     }
     outfile->Close();
+    cout << "Output file written: " << output_file_name << endl;
     delete outfile;
     delete wfs;
 
